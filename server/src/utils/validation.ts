@@ -25,6 +25,7 @@ export const medicalProfileSchema = z.object({
     currentMedications: z.array(z.string()).optional(),
     medicalHistory: z.string().optional(),
     doctorNotes: z.string().optional(),
+    firstAidInstructions: z.string().optional(),
     privacyLevel: z.enum(['public', 'link_only', 'pin_protected']).default('link_only'),
     pin: z.string().length(4, 'PIN must be 4 digits').regex(/^\d+$/, 'PIN must contain only numbers').optional(),
 });

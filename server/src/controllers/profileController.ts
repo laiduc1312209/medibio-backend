@@ -55,7 +55,8 @@ export async function createProfile(req: AuthRequest, res: Response): Promise<vo
         const allergiesEncrypted = encryptMedicalData(validatedData.allergies);
         const currentMedicationsEncrypted = encryptMedicalData(validatedData.currentMedications);
         const medicalHistoryEncrypted = encryptMedicalData(validatedData.medicalHistory);
-        const doctorNotesEncrypted = encryptMedicalData(validatedData.doctorNotes);
+        // Use doctorNotes field to store firstAidInstructions (if provided) or doctorNotes
+        const doctorNotesEncrypted = encryptMedicalData(validatedData.firstAidInstructions || validatedData.doctorNotes);
 
         // Hash PIN if provided
         let pinHash = null;
@@ -180,7 +181,10 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
         if (validatedData.medicalHistory !== undefined) {
             updateData.medicalHistoryEncrypted = encryptMedicalData(validatedData.medicalHistory);
         }
-        if (validatedData.doctorNotes !== undefined) {
+        // Use doctorNotes field to store firstAidInstructions (if provided) or doctorNotes
+        if (validatedData.firstAidInstructions !== undefined) {
+            updateData.doctorNotesEncrypted = encryptMedicalData(validatedData.firstAidInstructions);
+        } else if (validatedData.doctorNotes !== undefined) {
             updateData.doctorNotesEncrypted = encryptMedicalData(validatedData.doctorNotes);
         }
         if (validatedData.privacyLevel) {
