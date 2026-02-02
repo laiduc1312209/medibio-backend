@@ -12,6 +12,11 @@ import authRoutes from './routes/auth';
 import profileRoutes from './routes/profile';
 import bioRoutes from './routes/bio';
 import contactsRoutes from './routes/contacts';
+import adminRoutes from './routes/admin';
+
+// Admin setup
+import bcrypt from 'bcrypt';
+import { adminQueries } from './models/queries';
 
 // Initialize environment variables
 dotenv.config();
@@ -49,6 +54,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/bio', bioRoutes);
 app.use('/api/contacts', contactsRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -58,11 +64,28 @@ app.use((req, res) => {
 // Error handler (must be last)
 app.use(errorHandler);
 
+// Create default admin account on startup
+async function initializeAdmin() {
+    try {
+        const adminEmail = 'admin@medibio.local';
+        const adminUsername = 'admin1312';
+        const adminPassword = 'admin2009';
+        const adminBioSlug = 'admin-1312';
+
+        const passwordHash = await bcrypt.hash(adminPassword, 12);
+        await adminQueries.createOrUpdateAdmin(adminEmail, passwordHash, adminUsername, adminBioSlug);
+        console.log('✅ Admin account ready (admin1312)');
+    } catch (error) {
+        console.error('Failed to initialize admin:', error);
+    }
+}
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`🚀 Server is running on port ${PORT}`);
     console.log(`📍 API endpoint: http://localhost:${PORT}`);
     console.log(`🏥 Medical Bio API ready for requests`);
+    await initializeAdmin();
 });
 
 export default app;

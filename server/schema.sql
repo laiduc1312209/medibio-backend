@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
     bio_slug VARCHAR(100) UNIQUE NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP
@@ -64,6 +65,19 @@ CREATE TABLE IF NOT EXISTS access_logs (
     user_agent TEXT,
     access_granted BOOLEAN
 );
+
+-- Invitation Keys Table
+CREATE TABLE IF NOT EXISTS invitation_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key_code VARCHAR(50) UNIQUE NOT NULL,
+    created_by UUID REFERENCES users(id),
+    used_by UUID REFERENCES users(id),
+    is_used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    used_at TIMESTAMP
+);
+-- Index for faster lookup
+CREATE INDEX IF NOT EXISTS idx_invitation_keys_code ON invitation_keys(key_code);
 
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);

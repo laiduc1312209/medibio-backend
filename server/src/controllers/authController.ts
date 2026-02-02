@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import { userQueries } from '../models/queries';
+import { userQueries, keyQueries } from '../models/queries';
 import { generateToken } from '../utils/jwt';
 import { registerSchema, loginSchema } from '../utils/validation';
 
@@ -9,11 +9,31 @@ function generateBioSlug(username: string): string {
     return username.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
 }
 
+
+
 // Register new user
 export async function register(req: Request, res: Response): Promise<void> {
     try {
         const validatedData = registerSchema.parse(req.body);
         const { email, password, username } = validatedData;
+        const invitationKey = req.body.invitationKey; // Expect invitationKey in body
+
+        // 1. Validate Invitation Key
+        if (!invitationKey) {
+            res.status(400).json({ error: 'Invitation key is required' });
+            return;
+        }
+
+        const key = await keyQueries.getKey(invitationKey);
+        if (!key) {
+            res.status(400).json({ error: 'Invalid invitation key' });
+            return;
+        }
+
+        if (key.is_used) {
+            res.status(400).json({ error: 'Invitation key has already been used' });
+            return;
+        }
 
         // Check if email already exists
         const existingEmail = await userQueries.findUserByEmail(email);
@@ -42,6 +62,9 @@ export async function register(req: Request, res: Response): Promise<void> {
 
         // Create user
         const user = await userQueries.createUser(email, passwordHash, username, bioSlug);
+
+        // Mark key as used
+        await keyQueries.markKeyAsUsed(invitationKey, user.id);
 
         // Generate JWT token
         const token = generateToken({ userId: user.id, email: user.email });

@@ -6,6 +6,7 @@ export interface User {
     password_hash: string;
     username: string;
     bio_slug: string;
+    is_admin: boolean;
     created_at: Date;
     updated_at: Date;
     last_login: Date | null;
@@ -38,6 +39,16 @@ export interface EmergencyContact {
     email: string | null;
     priority: number;
     created_at: Date;
+}
+
+export interface InvitationKey {
+    id: string;
+    key_code: string;
+    created_by: string | null;
+    used_by: string | null;
+    is_used: boolean;
+    created_at: Date;
+    used_at: Date | null;
 }
 
 // User Queries
@@ -257,5 +268,126 @@ export const accessLogQueries = {
        VALUES ($1, $2, $3, $4)`,
             [medicalProfileId, ipAddress, userAgent, accessGranted]
         );
+    },
+};
+
+// Admin Queries
+export const adminQueries = {
+    async getAllUsers(limit: number = 50, offset: number = 0): Promise<{ users: User[]; total: number }> {
+        const countResult = await pool.query('SELECT COUNT(*) FROM users');
+        const total = parseInt(countResult.rows[0].count);
+
+        const result = await pool.query(
+            `SELECT id, email, username, bio_slug, is_admin, created_at, last_login 
+             FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+        return { users: result.rows, total };
+    },
+
+    async getAllProfiles(limit: number = 50, offset: number = 0): Promise<{ profiles: any[]; total: number }> {
+        const countResult = await pool.query('SELECT COUNT(*) FROM medical_profiles');
+        const total = parseInt(countResult.rows[0].count);
+
+        const result = await pool.query(
+            `SELECT mp.id, mp.full_name, mp.date_of_birth, mp.avatar_url, mp.privacy_level, mp.created_at,
+                    u.username, u.email
+             FROM medical_profiles mp
+             JOIN users u ON mp.user_id = u.id
+             ORDER BY mp.created_at DESC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+        return { profiles: result.rows, total };
+    },
+
+    async getStats(): Promise<{ userCount: number; profileCount: number; contactCount: number }> {
+        const userCount = await pool.query('SELECT COUNT(*) FROM users');
+        const profileCount = await pool.query('SELECT COUNT(*) FROM medical_profiles');
+        const contactCount = await pool.query('SELECT COUNT(*) FROM emergency_contacts');
+
+        return {
+            userCount: parseInt(userCount.rows[0].count),
+            profileCount: parseInt(profileCount.rows[0].count),
+            contactCount: parseInt(contactCount.rows[0].count),
+        };
+    },
+
+    async createOrUpdateAdmin(email: string, passwordHash: string, username: string, bioSlug: string): Promise<User> {
+        // Check if admin exists
+        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+
+        if (existing.rows[0]) {
+            // Update password if exists
+            await pool.query(
+                'UPDATE users SET password_hash = $1, is_admin = true WHERE username = $2',
+                [passwordHash, username]
+            );
+            return existing.rows[0];
+        }
+
+        // Create new admin
+        const result = await pool.query(
+            `INSERT INTO users (email, password_hash, username, bio_slug, is_admin)
+             VALUES ($1, $2, $3, $4, true)
+             RETURNING *`,
+            [email, passwordHash, username, bioSlug]
+        );
+        return result.rows[0];
+    },
+
+    async deleteUserById(userId: string): Promise<void> {
+        await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    },
+
+    async deleteProfileById(profileId: string): Promise<void> {
+        await pool.query('DELETE FROM medical_profiles WHERE id = $1', [profileId]);
+    },
+};
+
+// Invitation Key Queries
+export const keyQueries = {
+    async createKeys(keys: string[], adminId: string): Promise<void> {
+        if (keys.length === 0) return;
+
+        // Insert keys one by one to avoid parameter mismatch
+        for (const keyCode of keys) {
+            await pool.query(
+                `INSERT INTO invitation_keys (key_code, created_by) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [keyCode, adminId]
+            );
+        }
+    },
+
+    async getKey(keyCode: string): Promise<InvitationKey | null> {
+        const result = await pool.query(
+            'SELECT * FROM invitation_keys WHERE key_code = $1',
+            [keyCode]
+        );
+        return result.rows[0] || null;
+    },
+
+    async markKeyAsUsed(keyCode: string, userId: string): Promise<void> {
+        await pool.query(
+            'UPDATE invitation_keys SET is_used = TRUE, used_by = $1, used_at = CURRENT_TIMESTAMP WHERE key_code = $2',
+            [userId, keyCode]
+        );
+    },
+
+    async getAllKeys(limit: number = 50, offset: number = 0): Promise<{ keys: any[]; total: number }> {
+        const countResult = await pool.query('SELECT COUNT(*) FROM invitation_keys');
+        const total = parseInt(countResult.rows[0].count);
+
+        const result = await pool.query(
+            `SELECT k.*, 
+                    creator.username as creator_name,
+                    user_used.username as user_used_name
+             FROM invitation_keys k
+             LEFT JOIN users creator ON k.created_by = creator.id
+             LEFT JOIN users user_used ON k.used_by = user_used.id
+             ORDER BY k.created_at DESC 
+             LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+        return { keys: result.rows, total };
     },
 };
